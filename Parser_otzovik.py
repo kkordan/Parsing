@@ -4,16 +4,16 @@ import time
 import random
 import pandas as pd
 
-# Список прокси-серверов
+
 proxies_list = [
     {'http': 'http://188.93.107.29:8080'},
     {'http': 'http://20.205.61.143:8123'},
-    # Добавь свои HTTPS прокси
+
 ]
-# Индекс текущего прокси
+
 current_proxy_index = 0
 
-# Словарь категорий и их URL
+
 categories = {
     "Бытовая техника": "https://otzovik.com/in_town/companies/household_appliances_company/",
     "Бюро переводов": "https://otzovik.com/in_town/companies/translations/",
@@ -46,7 +46,7 @@ categories = {
     "Швейные фабрики и цеха": "https://otzovik.com/in_town/companies/clothing_factories/"
 }
 
-# Функция для проверки доступности прокси
+
 def check_proxy(proxy):
     try:
         response = requests.get("http://www.google.com", proxies=proxy, timeout=5)
@@ -60,7 +60,7 @@ def check_proxy(proxy):
         print(f"Ошибка при проверке прокси {proxy}: {e}")
         return False
 
-# Функция для смены IP через прокси
+
 def rotate_ip():
     global current_proxy_index
     current_proxy_index = (current_proxy_index + 1) % len(proxies_list)
@@ -68,79 +68,17 @@ def rotate_ip():
     print(f"Смена IP через прокси: {new_proxy}")
     return new_proxy
 
-# Функция для случайной паузы между запросами
 def random_pause(min_pause=10, max_pause=20):
     pause_duration = random.uniform(min_pause, max_pause)
     print(f"Пауза на {pause_duration:.2f} секунд")
     time.sleep(pause_duration)
 
-# Функция для записи отзыва в файл Excel
+
 def write_review_to_excel(review_data, filename='otzovik_reviews_with_categories.xlsx'):
     df = pd.DataFrame([review_data])
     df.to_excel(filename, index=False, mode='a', header=False)
     print(f"Отзыв добавлен в {filename}")
 
-# Функция для получения информации о компании и её отзывах
-def parse_company_reviews(company_url, proxies, headers, category_name):
-    page = 1
-
-    while True:
-        page_url = f"{company_url}/{page}"
-        print(f"Парсинг страницы: {page_url}")
-
-        try:
-            response = requests.get(page_url, headers=headers, proxies=proxies, verify=False)
-            print(f"Статус: {response.status_code}")
-        except Exception as e:
-            print(f"Ошибка при запросе страницы {page_url}: {e}")
-            proxies = rotate_ip()
-            return None
-
-        if response.status_code != 200:
-            print(f"Страница {page_url} недоступна. Статус: {response.status_code}")
-            proxies = rotate_ip()
-            return None
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        review_items = soup.select('[itemprop="review"]')
-        if not review_items:
-            print(f"Нет отзывов на странице {page_url}")
-            break
-
-        for review in review_items:
-            try:
-                author = review.select_one('[itemprop="author"] span').text.strip()
-                date = review.select_one('.review-postdate').text.strip()
-                rating_review = review.select_one('[itemprop="reviewRating"] span').text.strip()
-                review_text = review.select_one('[itemprop="description"]').text.strip()
-                pros = review.select_one('.review-plus').text.strip() if review.select_one('.review-plus') else "Нет"
-                cons = review.select_one('.review-minus').text.strip() if review.select_one('.review-minus') else "Нет"
-            except AttributeError:
-                continue  # Если какая-то информация отсутствует, пропускаем этот отзыв
-
-            review_data = {
-                'author': author,
-                'date': date,
-                'rating': rating_review,
-                'review_text': review_text,
-                'pros': pros,
-                'cons': cons,
-                'category': category_name  # Добавляем категорию
-            }
-
-            # Записываем каждый отзыв сразу в файл
-            write_review_to_excel(review_data)
-
-        # Проверяем наличие кнопки "Следующая страница"
-        next_button = soup.select_one('.pagination-next')
-        if next_button:
-            page += 1
-            random_pause()
-        else:
-            break
-
-# Функция для парсинга категории с добавлением названия категории к компании
 def parse_category():
     global current_proxy_index
     proxies = proxies_list[current_proxy_index]
@@ -151,14 +89,13 @@ def parse_category():
 
     filename = 'otzovik_reviews_with_categories.xlsx'
 
-    # Создаем Excel файл и записываем заголовки
-    df = pd.DataFrame(columns=['author', 'date', 'rating', 'review_text', 'pros', 'cons', 'category'])
+    df = pd.DataFrame(columns=['author', 'date', 'rating', 'review_text', 'pros', 'cons', 'category', 'company_name'])
     df.to_excel(filename, index=False)
 
     for category_name, category_url in categories.items():
         print(f"Парсинг категории: {category_name}")
 
-        for page in range(1, 6):  # Пример перебора 5 страниц
+        for page in range(1, 6): 
             page_url = f'{category_url}{page}'
             print(f"Парсинг страницы: {page_url}")
 
@@ -186,13 +123,96 @@ def parse_category():
                 company_url = 'https://otzovik.com' + company_link['href']
                 print(f"Парсинг компании: {company_url}")
 
-                parse_company_reviews(company_url, proxies, headers, category_name)
+
+                company_name = company_link.text.strip()
+                parse_company_reviews(company_url, proxies, headers, category_name, company_name)
 
                 random_pause()
 
             random_pause()
 
-# Основная функция
+def parse_company_reviews(company_url, proxies, headers, category_name, company_name):
+    page = 1
+
+    while True:
+        page_url = f"{company_url}{page}"  
+        print(f"Парсинг страницы: {page_url}")
+
+        try:
+            response = requests.get(page_url, headers=headers, proxies=proxies, verify=False)
+            print(f"Статус: {response.status_code}")
+        except Exception as e:
+            print(f"Ошибка при запросе страницы {page_url}: {e}")
+            proxies = rotate_ip()
+            return None
+
+        if response.status_code != 200:
+            print(f"Страница {page_url} недоступна. Статус: {response.status_code}")
+            proxies = rotate_ip()
+            return None
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        review_items = soup.select('[itemprop="review"]')
+        if not review_items:
+            print(f"Нет отзывов на странице {page_url}")
+            break
+
+        for review in review_items:
+
+            try:
+                author = review.select_one('[itemprop="author"] span').text.strip()
+            except AttributeError:
+                author = "Не указано"
+
+            try:
+                date = review.select_one('.review-postdate').text.strip()
+            except AttributeError:
+                date = "Не указана"
+
+            try:
+                rating_review = review.select_one('[itemprop="reviewRating"] span').text.strip()
+            except AttributeError:
+                rating_review = "Не указана"
+
+            try:
+                review_text = review.select_one('[itemprop="description"]').text.strip()
+            except AttributeError:
+                review_text = "Нет текста"
+
+            try:
+                pros = review.select_one('.review-plus').text.strip() if review.select_one('.review-plus') else "Нет"
+            except AttributeError:
+                pros = "Нет"
+
+            try:
+                cons = review.select_one('.review-minus').text.strip() if review.select_one('.review-minus') else "Нет"
+            except AttributeError:
+                cons = "Нет"
+
+            review_data = {
+                'author': author,
+                'date': date,
+                'rating': rating_review,
+                'review_text': review_text,
+                'pros': pros,
+                'cons': cons,
+                'category': category_name, 
+                'company_name': company_name 
+            }
+
+
+            write_review_to_excel(review_data)
+
+
+        next_button = soup.select_one('a.next.tooltip-top.button2023')
+        if next_button:
+            page += 1
+            random_pause()
+        else:
+            break
+
+
 def main():
     parse_category()
 
